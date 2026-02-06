@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Building,
+  Download,
   FileText,
   MapPin,
   Star,
@@ -205,9 +206,19 @@ export default function LeadDetailPage() {
                     {letter.content.slice(0, 300)}...
                   </p>
                 )}
-                <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
-                  <span>QR Scans: {letter.qr_scan_count}</span>
-                  <span>Cost: £{letter.generation_cost_gbp.toFixed(3)}</span>
+                <div className="flex items-center justify-between mt-3">
+                  <div className="flex items-center gap-4 text-xs text-gray-400">
+                    <span>QR Scans: {letter.qr_scan_count}</span>
+                    <span>Cost: £{letter.generation_cost_gbp.toFixed(3)}</span>
+                  </div>
+                  <a
+                    href={`/api/letters/${letter.id}/download`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs hover:bg-gray-50 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Download PDF
+                  </a>
                 </div>
               </div>
             ))}

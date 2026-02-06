@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Mail, Send } from "lucide-react";
+import { Check, Download, Mail, Send } from "lucide-react";
 import { approveLetter, getLetters, sendLetter } from "@/lib/api";
 import type { Letter, LetterListResponse } from "@/lib/api";
 import { cn, formatDate, getStatusColor } from "@/lib/utils";
@@ -118,7 +118,7 @@ export default function LettersPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2 pt-3 border-t border-gray-100">
+              <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
                 {letter.status === "draft" && (
                   <button
                     onClick={() => handleApprove(letter.id)}
@@ -127,6 +127,14 @@ export default function LettersPage() {
                     <Check className="w-4 h-4" /> Approve
                   </button>
                 )}
+                <a
+                  href={`/api/letters/${letter.id}/download`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+                >
+                  <Download className="w-4 h-4" /> Download PDF
+                </a>
                 {(letter.status === "approved" || letter.status === "draft") && (
                   <button
                     onClick={() => handleSend(letter.id)}
