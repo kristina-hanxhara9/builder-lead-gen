@@ -108,17 +108,27 @@ def download_letter_pdf(letter_id: UUID, db: Session = Depends(get_db)):
     if not letter.content:
         raise HTTPException(status_code=404, detail="No PDF or content available for this letter")
 
+    from app.core.config import client_config
     from app.services.pdf_generator import PDFGenerator
+    from app.services.qr_service import QRService
 
     generator = PDFGenerator()
     lead = db.query(Lead).filter(Lead.id == letter.lead_id).first()
     address = lead.address if lead else "Homeowner"
 
+    # Always generate a QR code — use stored URL or create one pointing to website
+    qr_url = letter.qr_code_url
+    if not qr_url:
+        qr_url = QRService.generate_tracking_url(str(letter.id))
+        # Save it back so future downloads use the same QR
+        letter.qr_code_url = qr_url
+        db.commit()
+
     pdf_bytes = generator.generate_letter_pdf(
         letter_content=letter.content,
         recipient_address=address,
         case_studies=[],
-        qr_url=letter.qr_code_url,
+        qr_url=qr_url,
     )
 
     safe_addr = address.split(",")[0].strip().replace(" ", "-")

@@ -2,6 +2,7 @@
 
 import io
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -37,6 +38,29 @@ class PDFGenerator:
         self.styles = getSampleStyleSheet()
         self._setup_styles()
 
+    @staticmethod
+    def _strip_ai_signature(text: str) -> str:
+        """Remove AI-generated signature block from letter content.
+
+        The AI often appends 'Yours sincerely/faithfully, Name, Title, Company...'
+        at the end of the letter. We strip this because the PDF generator adds
+        its own branded signature block with a handwritten image.
+        """
+        # Match common sign-off patterns at the end of the text
+        patterns = [
+            # "Yours sincerely," followed by name/title lines
+            r'\n*Yours\s+(sincerely|faithfully),?\s*\n.*$',
+            # "Kind regards," followed by name/title lines
+            r'\n*Kind\s+regards,?\s*\n.*$',
+            # "Best regards," followed by name/title lines
+            r'\n*Best\s+regards,?\s*\n.*$',
+            # "Warm regards," followed by name/title lines
+            r'\n*Warm\s+regards,?\s*\n.*$',
+        ]
+        for pattern in patterns:
+            text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
+        return text.rstrip()
+
     def _setup_styles(self):
         """Define custom paragraph styles."""
         self.styles.add(
@@ -44,9 +68,9 @@ class PDFGenerator:
                 "LetterBody",
                 parent=self.styles["Normal"],
                 fontName="Times-Roman",
-                fontSize=11,
-                leading=16,
-                spaceAfter=8,
+                fontSize=10.5,
+                leading=14,
+                spaceAfter=6,
             )
         )
         self.styles.add(
@@ -54,9 +78,9 @@ class PDFGenerator:
                 "LetterHeading",
                 parent=self.styles["Heading2"],
                 fontName="Times-Bold",
-                fontSize=13,
+                fontSize=12,
                 textColor=NAVY,
-                spaceAfter=6,
+                spaceAfter=4,
             )
         )
         self.styles.add(
@@ -116,34 +140,35 @@ class PDFGenerator:
             pagesize=A4,
             leftMargin=25 * mm,
             rightMargin=25 * mm,
-            topMargin=20 * mm,
-            bottomMargin=20 * mm,
+            topMargin=15 * mm,
+            bottomMargin=15 * mm,
         )
 
         story = []
 
         # --- Letterhead ---
         story.append(self._build_letterhead())
-        story.append(Spacer(1, 8 * mm))
+        story.append(Spacer(1, 5 * mm))
 
         # --- Horizontal rule ---
         story.append(self._gold_rule())
-        story.append(Spacer(1, 4 * mm))
+        story.append(Spacer(1, 3 * mm))
 
         # --- Property images (Street View + map side by side) ---
         if street_view_image or static_map_image:
             story.append(self._build_property_images(street_view_image, static_map_image))
-            story.append(Spacer(1, 4 * mm))
+            story.append(Spacer(1, 3 * mm))
 
         # --- Recipient address ---
         for line in recipient_address.split(","):
             story.append(
                 Paragraph(line.strip(), self.styles["LetterBody"])
             )
-        story.append(Spacer(1, 6 * mm))
+        story.append(Spacer(1, 4 * mm))
 
-        # --- Letter content ---
-        paragraphs = letter_content.split("\n\n")
+        # --- Letter content (strip AI-generated signature) ---
+        cleaned_content = self._strip_ai_signature(letter_content)
+        paragraphs = cleaned_content.split("\n\n")
         for para in paragraphs:
             para = para.strip()
             if not para:
@@ -152,15 +177,15 @@ class PDFGenerator:
             para = para.replace("\n", "<br/>")
             story.append(Paragraph(para, self.styles["LetterBody"]))
 
-        story.append(Spacer(1, 4 * mm))
+        story.append(Spacer(1, 2 * mm))
 
-        # --- Signature area ---
+        # --- Signature area (branded, with handwritten signature image) ---
         story.append(self._build_signature())
-        story.append(Spacer(1, 6 * mm))
+        story.append(Spacer(1, 3 * mm))
 
         # --- Gold rule ---
         story.append(self._gold_rule())
-        story.append(Spacer(1, 4 * mm))
+        story.append(Spacer(1, 3 * mm))
 
         # --- Case studies ---
         if case_studies:
@@ -178,44 +203,38 @@ class PDFGenerator:
                 story.append(Paragraph(cs_text, self.styles["LetterBody"]))
                 story.append(Spacer(1, 2 * mm))
 
-        # --- QR Code ---
-        if qr_url:
-            story.append(Spacer(1, 4 * mm))
-            story.append(
-                Paragraph(
-                    "Scan to visit our website and see more projects:",
-                    self.styles["LetterBody"],
-                )
-            )
-            qr_bytes = QRService.generate_qr_image(qr_url, size=120)
-            qr_image = Image(io.BytesIO(qr_bytes), width=30 * mm, height=30 * mm)
-            story.append(qr_image)
-
-        # --- Footer ---
-        story.append(Spacer(1, 6 * mm))
-        story.append(self._gold_rule())
-        footer_text = (
-            f"{client_config.company_name} | {client_config.phone} | "
-            f"{client_config.website}<br/>"
-            f"Company Reg: {client_config.legal['company_registration']} | "
-            f"VAT: {client_config.legal['vat_number']} | "
-            f"Public Liability: £{client_config.legal['public_liability_amount']}"
-        )
-        story.append(Paragraph(footer_text, self.styles["Footer"]))
+        # --- QR Code + Footer (side by side to save space) ---
+        story.append(self._build_qr_footer(qr_url))
 
         doc.build(story)
         return buf.getvalue()
 
     def _build_letterhead(self) -> Table:
-        """Build the letterhead with company name and contact info."""
+        """Build the letterhead with logo and contact info."""
+        assets_dir = Path(__file__).parent.parent.parent.parent / "assets"
+        logo_path = assets_dir / "logos" / "logo.png"
+
         left = []
-        left.append(Paragraph(client_config.company_name, self.styles["CompanyName"]))
-        left.append(
-            Paragraph(
-                f"Est. {client_config.trading_since} | Specialists in Extensions & Loft Conversions",
-                self.styles["CompanyTagline"],
+        if logo_path.exists():
+            try:
+                logo = Image(str(logo_path), width=65 * mm, height=20 * mm)
+                left.append(logo)
+            except Exception:
+                left.append(Paragraph(client_config.company_name, self.styles["CompanyName"]))
+                left.append(
+                    Paragraph(
+                        f"Est. {client_config.trading_since} | Specialists in Extensions & Loft Conversions",
+                        self.styles["CompanyTagline"],
+                    )
+                )
+        else:
+            left.append(Paragraph(client_config.company_name, self.styles["CompanyName"]))
+            left.append(
+                Paragraph(
+                    f"Est. {client_config.trading_since} | Specialists in Extensions & Loft Conversions",
+                    self.styles["CompanyTagline"],
+                )
             )
-        )
 
         right = []
         contact_style = ParagraphStyle(
@@ -226,20 +245,10 @@ class PDFGenerator:
             textColor=LIGHT_BLUE,
             alignment=2,  # right
         )
-        right.append(
-            Paragraph(client_config.phone, contact_style)
-        )
-        right.append(
-            Paragraph(client_config.email, contact_style)
-        )
-        right.append(
-            Paragraph(client_config.website, contact_style)
-        )
-        right.append(
-            Paragraph(client_config.office_address, contact_style)
-        )
-
-        from reportlab.platypus import KeepInFrame
+        right.append(Paragraph(client_config.phone, contact_style))
+        right.append(Paragraph(client_config.email, contact_style))
+        right.append(Paragraph(client_config.website, contact_style))
+        right.append(Paragraph(client_config.office_address, contact_style))
 
         table_data = [[left, right]]
         t = Table(table_data, colWidths=[100 * mm, 60 * mm])
@@ -250,15 +259,113 @@ class PDFGenerator:
         )
         return t
 
-    def _build_signature(self) -> Paragraph:
-        """Build signature block."""
-        sig_text = (
-            f"Yours sincerely,<br/><br/>"
-            f"<b>{client_config.owner_name}</b><br/>"
-            f"Director, {client_config.company_name}<br/>"
-            f"Tel: {client_config.phone}"
+    def _build_signature(self) -> Table:
+        """Build signature block with optional handwritten signature image."""
+        assets_dir = Path(__file__).parent.parent.parent.parent / "assets"
+        sig_path = assets_dir / "signatures" / "signature.png"
+
+        elements = []
+        elements.append(Paragraph("Yours sincerely,", self.styles["LetterBody"]))
+        elements.append(Spacer(1, 1 * mm))
+
+        if sig_path.exists():
+            try:
+                sig_img = Image(str(sig_path), width=35 * mm, height=9 * mm)
+                elements.append(sig_img)
+            except Exception:
+                elements.append(Spacer(1, 6 * mm))
+        else:
+            elements.append(Spacer(1, 6 * mm))
+
+        sig_style = ParagraphStyle(
+            "SignatureText",
+            parent=self.styles["LetterBody"],
+            fontSize=10,
+            leading=13,
+            spaceAfter=0,
         )
-        return Paragraph(sig_text, self.styles["LetterBody"])
+        elements.append(
+            Paragraph(
+                f"<b>{client_config.owner_name}</b><br/>"
+                f"Director, {client_config.company_name}",
+                sig_style,
+            )
+        )
+
+        # Wrap in a single-cell table to keep together
+        t = Table([[elements]], colWidths=[160 * mm])
+        t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        return t
+
+    def _build_qr_footer(self, qr_url: Optional[str] = None) -> Table:
+        """Build QR code and footer combined in a compact layout."""
+        story_parts = []
+
+        # Gold rule above footer area
+        story_parts.append(self._gold_rule())
+        story_parts.append(Spacer(1, 2 * mm))
+
+        if qr_url:
+            # QR code on the left, footer text on the right
+            qr_bytes = QRService.generate_qr_image(qr_url, size=100)
+            qr_image = Image(io.BytesIO(qr_bytes), width=22 * mm, height=22 * mm)
+
+            qr_label_style = ParagraphStyle(
+                "QRLabel",
+                parent=self.styles["Normal"],
+                fontName="Times-Italic",
+                fontSize=7.5,
+                textColor=LIGHT_BLUE,
+                leading=10,
+            )
+            qr_cell = [
+                qr_image,
+                Spacer(1, 1 * mm),
+                Paragraph("Scan for a free quote", qr_label_style),
+            ]
+
+            footer_style = ParagraphStyle(
+                "FooterRight",
+                parent=self.styles["Normal"],
+                fontName="Times-Roman",
+                fontSize=7,
+                textColor=colors.gray,
+                alignment=2,  # right
+                leading=10,
+            )
+            footer_text = (
+                f"{client_config.company_name}<br/>"
+                f"{client_config.phone} | {client_config.website}<br/>"
+                f"Company Reg: {client_config.legal['company_registration']}<br/>"
+                f"VAT: {client_config.legal['vat_number']}<br/>"
+                f"Public Liability: £{client_config.legal['public_liability_amount']}"
+            )
+            footer_cell = [Paragraph(footer_text, footer_style)]
+
+            row = Table([[qr_cell, footer_cell]], colWidths=[35 * mm, 125 * mm])
+            row.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ]))
+            story_parts.append(row)
+        else:
+            # No QR — just centered footer
+            footer_text = (
+                f"{client_config.company_name} | {client_config.phone} | "
+                f"{client_config.website}<br/>"
+                f"Company Reg: {client_config.legal['company_registration']} | "
+                f"VAT: {client_config.legal['vat_number']} | "
+                f"Public Liability: £{client_config.legal['public_liability_amount']}"
+            )
+            story_parts.append(Paragraph(footer_text, self.styles["Footer"]))
+
+        # Wrap everything so it stays together
+        wrapper_data = [[part] for part in story_parts]
+        wrapper = Table(wrapper_data, colWidths=[160 * mm])
+        wrapper.setStyle(TableStyle([
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+        ]))
+        return wrapper
 
     def _build_property_images(
         self,
