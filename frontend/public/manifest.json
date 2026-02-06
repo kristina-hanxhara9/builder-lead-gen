@@ -1,0 +1,10 @@
+{
+  "name": "Smith & Sons — Lead Generation",
+  "short_name": "S&S Leads",
+  "description": "Automated lead generation from London planning applications",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1a365d",
+  "icons": []
+}

@@ -1,0 +1,134 @@
+company:
+  name: Smith & Sons Builders
+  trading_since: 1998
+  owner_name: John Smith
+  owner_signature_path: assets/signatures/john_smith.png
+  contact:
+    phone: 020 7946 0123
+    email: john@smithandsons.co.uk
+    website: smithandsons.co.uk
+    office_address: 123 High Street, Wandsworth, London SW18 2PT
+  branding:
+    logo_path: assets/logos/smith_sons.png
+    primary_color: '#1a365d'
+    secondary_color: '#2c5282'
+    accent_color: '#d4a574'
+    font_family: Georgia
+  legal:
+    company_registration: '12345678'
+    vat_number: GB 123 4567 89
+    public_liability_amount: '5000000'
+    insurance_provider: AXA
+  credentials:
+  - FMB (Federation of Master Builders) Member
+  - TrustMark Registered
+  - 25+ years experience in SW London
+  - 400+ completed projects
+  - 4.9/5 star rating (152 reviews)
+services:
+  primary:
+  - EXTENSION
+  - CONVERSION_LOFT
+  secondary:
+  - KITCHEN
+  - CONVERSION_GARAGE
+  exclude:
+  - SOLAR_PV
+  - HEAT_PUMP
+  - GENERAL_RENOVATION
+geographic_area:
+  type: postcode_districts
+  districts:
+  - SW11
+  - SW12
+  - SW15
+  - SW17
+  - SW18
+  max_distance_km: 8
+  borough_councils:
+  - wandsworth
+  - lambeth
+  - richmond
+lead_scoring:
+  weights:
+    geography: 30
+    property_value: 25
+    work_type: 30
+    timing: 15
+  minimum_score: 65
+  auto_send_threshold: 85
+letter_settings:
+  auto_approve: false
+  include_case_studies: 3
+  max_case_study_age_years: 3
+  case_studies:
+  - id: battersea_victorian_2023
+    title: Victorian Semi Extension, Battersea
+    location: SW11
+    year_completed: 2023
+    work_type: Single storey rear + side return
+    project_value: '85000'
+    floor_area_added: '35'
+    before_photo: assets/case_studies/battersea_before.jpg
+    after_photo: assets/case_studies/battersea_after.jpg
+    testimonial: Exceptional craftsmanship and minimal disruption. John and his team
+      were a pleasure to work with from start to finish.
+    client_name: Mrs. J. Williams
+    planning_challenges: Conservation Area approval
+  - id: wandsworth_loft_2024
+    title: Loft Conversion, Wandsworth
+    location: SW18
+    year_completed: 2024
+    work_type: Hip-to-gable loft conversion
+    project_value: '65000'
+    floor_area_added: '45'
+    bedrooms_added: 2
+    before_photo: assets/case_studies/wandsworth_before.jpg
+    after_photo: assets/case_studies/wandsworth_after.jpg
+    testimonial: Transformed our home. Attention to detail outstanding.
+    client_name: Mr. & Mrs. Thompson
+  - id: balham_listed_2023
+    title: Listed Building Extension, Balham
+    location: SW12
+    year_completed: 2023
+    work_type: Conservation Area rear extension
+    project_value: '95000'
+    before_photo: assets/case_studies/balham_before.jpg
+    after_photo: assets/case_studies/balham_after.jpg
+    testimonial: Navigated Listed Building consent expertly. The extension blends
+      seamlessly with the original Victorian character.
+    client_name: Dr. R. Patel
+    planning_challenges: Listed Building Grade II
+reporting:
+  send_daily_summary: true
+  daily_summary_email: john@smithandsons.co.uk
+  daily_summary_time: 08:00
+  send_weekly_report: true
+  weekly_report_day: Monday
+  weekly_report_time: 09:00
+  weekly_report_email: john@smithandsons.co.uk
+  metrics_to_track:
+  - new_leads_count
+  - letters_sent_count
+  - letters_pending_approval
+  - qr_scans_count
+  - phone_calls_received
+  - quotes_issued
+  - jobs_won
+  - conversion_rate
+  - average_project_value
+  - total_pipeline_value
+integrations:
+  stannp:
+    api_key: ${STANNP_API_KEY}
+    test_mode: false
+  gemini:
+    api_key: ${GEMINI_API_KEY}
+    model_extraction: gemini-2.0-flash
+    model_generation: gemini-2.0-flash
+  smtp:
+    enabled: true
+    host: smtp.gmail.com
+    port: 587
+    username: ${SMTP_USERNAME}
+    from_email: system@smithandsons.co.uk
