@@ -5,34 +5,57 @@ import {
   Bell,
   Building,
   Check,
+  Crown,
   Hammer,
   Loader2,
   MapPin,
   Plus,
   Save,
+  Shield,
   Target,
   X,
 } from "lucide-react";
 import { getSettings, updateSettings } from "@/lib/api";
 import type { AppSettings, SettingsUpdateRequest } from "@/lib/api";
 
-// All known service type codes with friendly labels
-const SERVICE_TYPE_LABELS: Record<string, string> = {
+// ═══════════════════════════════════════════════════════════════
+// HARDCODED CLIENT DATA — this is the client's bespoke system
+// Change these values per client deployment
+// ═══════════════════════════════════════════════════════════════
+const CLIENT = {
+  name: "Smith & Sons Builders",
+  owner: "John Smith",
+  phone: "020 7946 0123",
+  email: "john@smithandsons.co.uk",
+  website: "smithandsons.co.uk",
+  address: "123 High Street, Wandsworth, London SW18 2PT",
+  companyReg: "12345678",
+  vat: "GB 123 4567 89",
+  tradingSince: 1998,
+  logo: "/logo.png", // optional
+};
+
+// Services THIS client actually does — controls what appears in tiers
+const CLIENT_SERVICES: Record<string, string> = {
   EXTENSION: "Extensions",
   CONVERSION_LOFT: "Loft Conversions",
   KITCHEN: "Kitchen Extensions",
   CONVERSION_GARAGE: "Garage Conversions",
   BATHROOM: "Bathrooms",
-  CONVERSION_BASEMENT: "Basement Conversions",
-  NEW_BUILD: "New Builds",
   RENOVATION: "Renovations",
+};
+
+// Services to ALWAYS exclude (not in their trade)
+const ALWAYS_EXCLUDED_LABELS: Record<string, string> = {
   SOLAR_PV: "Solar PV",
   HEAT_PUMP: "Heat Pumps",
   GENERAL_RENOVATION: "General Renovation",
+  NEW_BUILD: "New Builds",
+  CONVERSION_BASEMENT: "Basement Conversions",
 };
 
-// Known councils with portal support
-const ALL_COUNCILS = [
+// Known councils in their area
+const AVAILABLE_COUNCILS = [
   "wandsworth",
   "lambeth",
   "richmond",
@@ -45,7 +68,6 @@ const ALL_COUNCILS = [
 ];
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<{
@@ -53,17 +75,7 @@ export default function SettingsPage() {
     msg: string;
   } | null>(null);
 
-  // ── Editable state ──
-  const [company, setCompany] = useState({
-    name: "",
-    owner_name: "",
-    phone: "",
-    email: "",
-    website: "",
-    office_address: "",
-    company_registration: "",
-    vat_number: "",
-  });
+  // ── Editable state (only the parts the client can change) ──
   const [services, setServices] = useState<{
     primary: string[];
     secondary: string[];
@@ -75,12 +87,16 @@ export default function SettingsPage() {
     borough_councils: string[];
   }>({ districts: [], max_distance_km: 8, borough_councils: [] });
   const [scoring, setScoring] = useState({
-    weights: { geography: 30, property_value: 25, work_type: 30, timing: 15 } as Record<string, number>,
+    weights: {
+      geography: 30,
+      property_value: 25,
+      work_type: 30,
+      timing: 15,
+    } as Record<string, number>,
     minimum_score: 65,
     auto_send_threshold: 85,
   });
 
-  // Temp inputs for adding items
   const [newDistrict, setNewDistrict] = useState("");
   const [newCouncil, setNewCouncil] = useState("");
 
@@ -92,17 +108,6 @@ export default function SettingsPage() {
     setLoading(true);
     try {
       const data = await getSettings();
-      setSettings(data);
-      setCompany({
-        name: data.company.name,
-        owner_name: data.company.owner_name,
-        phone: data.company.phone,
-        email: data.company.email,
-        website: data.company.website,
-        office_address: data.company.office_address,
-        company_registration: data.company.company_registration,
-        vat_number: data.company.vat_number,
-      });
       setServices(data.services);
       setGeo(data.geographic_area);
       setScoring(data.lead_scoring);
@@ -118,7 +123,6 @@ export default function SettingsPage() {
     setSaveResult(null);
     try {
       const payload: SettingsUpdateRequest = {
-        company,
         services,
         geographic_area: geo,
         lead_scoring: scoring,
@@ -136,24 +140,18 @@ export default function SettingsPage() {
     }
   }
 
-  // ── Service tier helpers ──
-  function moveService(code: string, from: keyof typeof services, to: keyof typeof services) {
+  // ── Service tier helpers (only for CLIENT_SERVICES) ──
+  function moveService(
+    code: string,
+    from: keyof typeof services,
+    to: keyof typeof services
+  ) {
     setServices((prev) => ({
       ...prev,
       [from]: prev[from].filter((s) => s !== code),
       [to]: [...prev[to].filter((s) => s !== code), code],
     }));
   }
-
-  // Get unassigned service types
-  const assignedServices = [
-    ...services.primary,
-    ...services.secondary,
-    ...services.exclude,
-  ];
-  const unassignedServices = Object.keys(SERVICE_TYPE_LABELS).filter(
-    (s) => !assignedServices.includes(s)
-  );
 
   if (loading) {
     return (
@@ -162,6 +160,8 @@ export default function SettingsPage() {
       </div>
     );
   }
+
+  const yearsTrading = new Date().getFullYear() - CLIENT.tradingSince;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -183,222 +183,241 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* ═══ Company Details ═══ */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-navy-900 mb-4 flex items-center gap-2">
-          <Building className="w-5 h-5 text-gold" /> Company Details
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {([
-            { label: "Company Name", key: "name" as const },
-            { label: "Owner Name", key: "owner_name" as const },
-            { label: "Phone", key: "phone" as const },
-            { label: "Email", key: "email" as const },
-            { label: "Website", key: "website" as const },
-            { label: "Company Reg", key: "company_registration" as const },
-            { label: "VAT Number", key: "vat_number" as const },
-          ]).map(({ label, key }) => (
-            <div key={key}>
-              <label className="block text-xs text-gray-500 mb-1">
-                {label}
-              </label>
-              <input
-                type="text"
-                value={company[key]}
-                onChange={(e) =>
-                  setCompany({ ...company, [key]: e.target.value })
-                }
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
-              />
+      {/* ═══ Client Branded Header ═══ */}
+      <section className="bg-gradient-to-br from-navy-900 to-navy-800 rounded-xl border border-navy-700 p-6 text-white relative overflow-hidden">
+        <div className="absolute top-4 right-4">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gold/20 text-gold rounded-full text-xs font-semibold">
+            <Crown className="w-3 h-3" />
+            Premium Plan
+          </span>
+        </div>
+        <div className="flex items-start gap-5">
+          <div className="w-16 h-16 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Building className="w-8 h-8 text-gold" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">{CLIENT.name}</h2>
+            <p className="text-navy-200 text-sm mt-1">
+              Est. {CLIENT.tradingSince} · {yearsTrading} years in SW London
+            </p>
+            <div className="grid grid-cols-2 gap-x-8 gap-y-1 mt-4 text-sm">
+              <div>
+                <span className="text-navy-300">Owner:</span>{" "}
+                <span className="text-white font-medium">{CLIENT.owner}</span>
+              </div>
+              <div>
+                <span className="text-navy-300">Phone:</span>{" "}
+                <span className="text-white font-medium">{CLIENT.phone}</span>
+              </div>
+              <div>
+                <span className="text-navy-300">Email:</span>{" "}
+                <span className="text-white font-medium">{CLIENT.email}</span>
+              </div>
+              <div>
+                <span className="text-navy-300">Website:</span>{" "}
+                <span className="text-white font-medium">
+                  {CLIENT.website}
+                </span>
+              </div>
+              <div className="col-span-2">
+                <span className="text-navy-300">Office:</span>{" "}
+                <span className="text-white font-medium">
+                  {CLIENT.address}
+                </span>
+              </div>
             </div>
-          ))}
-          <div className="md:col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">
-              Office Address
-            </label>
-            <input
-              type="text"
-              value={company.office_address}
-              onChange={(e) =>
-                setCompany({ ...company, office_address: e.target.value })
-              }
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
-            />
           </div>
         </div>
+        <p className="mt-4 text-xs text-navy-300 flex items-center gap-1.5">
+          <Shield className="w-3 h-3" />
+          To update company details, contact your account manager.
+        </p>
       </section>
 
-      {/* ═══ Services Offered ═══ */}
+      {/* ═══ Your Services ═══ */}
       <section className="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-navy-900 mb-4 flex items-center gap-2">
-          <Hammer className="w-5 h-5 text-gold" /> Services Offered
+        <h3 className="text-lg font-semibold text-navy-900 mb-1 flex items-center gap-2">
+          <Hammer className="w-5 h-5 text-gold" /> Your Services
         </h3>
         <p className="text-xs text-gray-500 mb-4">
-          Move services between tiers to control how leads are scored.{" "}
-          <strong>Primary</strong> = full score,{" "}
-          <strong>Secondary</strong> = partial score,{" "}
-          <strong>Excluded</strong> = skip these leads.
+          Control which planning applications your system targets.{" "}
+          <strong>Primary</strong> = top priority (full score),{" "}
+          <strong>Secondary</strong> = also interested (partial score),{" "}
+          <strong>Not interested</strong> = skip these leads.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Primary */}
-          <div className="border border-green-200 rounded-lg p-4 bg-green-50/50">
-            <h4 className="text-sm font-semibold text-green-800 mb-3">
-              Primary Services
-              <span className="text-xs font-normal text-green-600 ml-1">
-                (full score)
+          <div className="border-2 border-green-200 rounded-xl p-4 bg-green-50/30">
+            <h4 className="text-sm font-bold text-green-800 mb-3 flex items-center gap-1.5">
+              <span className="w-2 h-2 bg-green-500 rounded-full" />
+              Core Services
+              <span className="text-xs font-normal text-green-600 ml-auto">
+                100% score
               </span>
             </h4>
             <div className="space-y-2">
-              {services.primary.map((code) => (
-                <div
-                  key={code}
-                  className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-green-200"
-                >
-                  <span className="text-sm">
-                    {SERVICE_TYPE_LABELS[code] || code}
-                  </span>
-                  <div className="flex gap-1">
+              {services.primary
+                .filter((code) => code in CLIENT_SERVICES)
+                .map((code) => (
+                  <div
+                    key={code}
+                    className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-green-200 shadow-sm"
+                  >
+                    <span className="text-sm font-medium">
+                      {CLIENT_SERVICES[code] || code}
+                    </span>
                     <button
-                      onClick={() => moveService(code, "primary", "secondary")}
-                      className="text-xs text-gray-400 hover:text-orange-600 px-1"
+                      onClick={() =>
+                        moveService(code, "primary", "secondary")
+                      }
+                      className="text-xs text-gray-400 hover:text-orange-600 px-2 py-0.5 rounded hover:bg-orange-50 transition-colors"
                       title="Move to Secondary"
                     >
-                      2nd
-                    </button>
-                    <button
-                      onClick={() => moveService(code, "primary", "exclude")}
-                      className="text-xs text-gray-400 hover:text-red-600 px-1"
-                      title="Exclude"
-                    >
-                      <X className="w-3 h-3" />
+                      ↓
                     </button>
                   </div>
-                </div>
-              ))}
+                ))}
+              {services.primary.filter((code) => code in CLIENT_SERVICES)
+                .length === 0 && (
+                <p className="text-xs text-gray-400 italic py-2">
+                  Drag services here
+                </p>
+              )}
             </div>
           </div>
 
           {/* Secondary */}
-          <div className="border border-orange-200 rounded-lg p-4 bg-orange-50/50">
-            <h4 className="text-sm font-semibold text-orange-800 mb-3">
-              Secondary Services
-              <span className="text-xs font-normal text-orange-600 ml-1">
-                (partial score)
+          <div className="border-2 border-orange-200 rounded-xl p-4 bg-orange-50/30">
+            <h4 className="text-sm font-bold text-orange-800 mb-3 flex items-center gap-1.5">
+              <span className="w-2 h-2 bg-orange-500 rounded-full" />
+              Also Interested
+              <span className="text-xs font-normal text-orange-600 ml-auto">
+                50% score
               </span>
             </h4>
             <div className="space-y-2">
-              {services.secondary.map((code) => (
-                <div
-                  key={code}
-                  className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-orange-200"
-                >
-                  <span className="text-sm">
-                    {SERVICE_TYPE_LABELS[code] || code}
-                  </span>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => moveService(code, "secondary", "primary")}
-                      className="text-xs text-gray-400 hover:text-green-600 px-1"
-                      title="Move to Primary"
-                    >
-                      1st
-                    </button>
-                    <button
-                      onClick={() => moveService(code, "secondary", "exclude")}
-                      className="text-xs text-gray-400 hover:text-red-600 px-1"
-                      title="Exclude"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+              {services.secondary
+                .filter((code) => code in CLIENT_SERVICES)
+                .map((code) => (
+                  <div
+                    key={code}
+                    className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-orange-200 shadow-sm"
+                  >
+                    <span className="text-sm font-medium">
+                      {CLIENT_SERVICES[code] || code}
+                    </span>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() =>
+                          moveService(code, "secondary", "primary")
+                        }
+                        className="text-xs text-gray-400 hover:text-green-600 px-2 py-0.5 rounded hover:bg-green-50 transition-colors"
+                        title="Move to Core"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        onClick={() =>
+                          moveService(code, "secondary", "exclude")
+                        }
+                        className="text-xs text-gray-400 hover:text-red-600 px-2 py-0.5 rounded hover:bg-red-50 transition-colors"
+                        title="Not interested"
+                      >
+                        ↓
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              {services.secondary.filter((code) => code in CLIENT_SERVICES)
+                .length === 0 && (
+                <p className="text-xs text-gray-400 italic py-2">
+                  No secondary services
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Excluded */}
-          <div className="border border-red-200 rounded-lg p-4 bg-red-50/50">
-            <h4 className="text-sm font-semibold text-red-800 mb-3">
-              Excluded
-              <span className="text-xs font-normal text-red-600 ml-1">
-                (skip these)
+          {/* Not Interested */}
+          <div className="border-2 border-gray-200 rounded-xl p-4 bg-gray-50/30">
+            <h4 className="text-sm font-bold text-gray-600 mb-3 flex items-center gap-1.5">
+              <span className="w-2 h-2 bg-gray-400 rounded-full" />
+              Not Interested
+              <span className="text-xs font-normal text-gray-500 ml-auto">
+                skipped
               </span>
             </h4>
             <div className="space-y-2">
-              {services.exclude.map((code) => (
-                <div
-                  key={code}
-                  className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-red-200"
-                >
-                  <span className="text-sm">
-                    {SERVICE_TYPE_LABELS[code] || code}
-                  </span>
-                  <div className="flex gap-1">
+              {services.exclude
+                .filter((code) => code in CLIENT_SERVICES)
+                .map((code) => (
+                  <div
+                    key={code}
+                    className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-gray-200 shadow-sm"
+                  >
+                    <span className="text-sm font-medium text-gray-500">
+                      {CLIENT_SERVICES[code] || code}
+                    </span>
                     <button
-                      onClick={() => moveService(code, "exclude", "primary")}
-                      className="text-xs text-gray-400 hover:text-green-600 px-1"
-                      title="Move to Primary"
-                    >
-                      1st
-                    </button>
-                    <button
-                      onClick={() => moveService(code, "exclude", "secondary")}
-                      className="text-xs text-gray-400 hover:text-orange-600 px-1"
+                      onClick={() =>
+                        moveService(code, "exclude", "secondary")
+                      }
+                      className="text-xs text-gray-400 hover:text-orange-600 px-2 py-0.5 rounded hover:bg-orange-50 transition-colors"
                       title="Move to Secondary"
                     >
-                      2nd
+                      ↑
                     </button>
                   </div>
-                </div>
-              ))}
+                ))}
+              {/* Show always-excluded as locked items */}
+              {services.exclude
+                .filter((code) => code in ALWAYS_EXCLUDED_LABELS)
+                .map((code) => (
+                  <div
+                    key={code}
+                    className="flex items-center justify-between bg-gray-100 rounded-lg px-3 py-2 border border-gray-200 opacity-60"
+                  >
+                    <span className="text-xs text-gray-400">
+                      {ALWAYS_EXCLUDED_LABELS[code] || code}
+                    </span>
+                    <span className="text-[10px] text-gray-400">
+                      not your trade
+                    </span>
+                  </div>
+                ))}
+              {services.exclude.filter((code) => code in CLIENT_SERVICES)
+                .length === 0 &&
+                services.exclude.filter(
+                  (code) => code in ALWAYS_EXCLUDED_LABELS
+                ).length === 0 && (
+                  <p className="text-xs text-gray-400 italic py-2">
+                    All services active
+                  </p>
+                )}
             </div>
           </div>
         </div>
-
-        {/* Add unassigned services */}
-        {unassignedServices.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <p className="text-xs text-gray-500 mb-2">
-              Add more service types:
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {unassignedServices.map((code) => (
-                <button
-                  key={code}
-                  onClick={() =>
-                    setServices((prev) => ({
-                      ...prev,
-                      secondary: [...prev.secondary, code],
-                    }))
-                  }
-                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs hover:bg-gray-200 transition-colors"
-                >
-                  <Plus className="w-3 h-3" />
-                  {SERVICE_TYPE_LABELS[code] || code}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </section>
 
-      {/* ═══ Service Area ═══ */}
+      {/* ═══ Your Patch ═══ */}
       <section className="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-navy-900 mb-4 flex items-center gap-2">
-          <MapPin className="w-5 h-5 text-gold" /> Service Area
+        <h3 className="text-lg font-semibold text-navy-900 mb-1 flex items-center gap-2">
+          <MapPin className="w-5 h-5 text-gold" /> Your Patch
         </h3>
+        <p className="text-xs text-gray-500 mb-4">
+          We monitor planning applications in these areas for you.
+        </p>
 
         {/* Postcode Districts */}
         <div className="mb-6">
-          <label className="block text-xs text-gray-500 mb-2 uppercase font-medium">
+          <label className="block text-xs text-gray-500 mb-2 uppercase font-medium tracking-wide">
             Postcode Districts
           </label>
           <div className="flex flex-wrap gap-2 mb-3">
             {geo.districts.map((d) => (
               <span
                 key={d}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-navy-50 text-navy-900 rounded-lg text-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-navy-50 text-navy-900 rounded-lg text-sm font-medium"
               >
                 {d}
                 <button
@@ -408,7 +427,7 @@ export default function SettingsPage() {
                       districts: geo.districts.filter((x) => x !== d),
                     })
                   }
-                  className="text-navy-400 hover:text-red-600"
+                  className="text-navy-400 hover:text-red-600 transition-colors"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -436,7 +455,10 @@ export default function SettingsPage() {
             />
             <button
               onClick={() => {
-                if (newDistrict.trim() && !geo.districts.includes(newDistrict.trim())) {
+                if (
+                  newDistrict.trim() &&
+                  !geo.districts.includes(newDistrict.trim())
+                ) {
                   setGeo({
                     ...geo,
                     districts: [...geo.districts, newDistrict.trim()],
@@ -453,8 +475,8 @@ export default function SettingsPage() {
 
         {/* Max Distance */}
         <div className="mb-6">
-          <label className="block text-xs text-gray-500 mb-2 uppercase font-medium">
-            Max Distance from Office (km)
+          <label className="block text-xs text-gray-500 mb-2 uppercase font-medium tracking-wide">
+            Max Distance from Your Office
           </label>
           <div className="flex items-center gap-4">
             <input
@@ -463,7 +485,10 @@ export default function SettingsPage() {
               max={30}
               value={geo.max_distance_km}
               onChange={(e) =>
-                setGeo({ ...geo, max_distance_km: parseInt(e.target.value) })
+                setGeo({
+                  ...geo,
+                  max_distance_km: parseInt(e.target.value),
+                })
               }
               className="flex-1"
             />
@@ -471,18 +496,21 @@ export default function SettingsPage() {
               {geo.max_distance_km} km
             </span>
           </div>
+          <p className="text-xs text-gray-400 mt-1">
+            Leads further than this will score lower on geography.
+          </p>
         </div>
 
         {/* Borough Councils */}
         <div>
-          <label className="block text-xs text-gray-500 mb-2 uppercase font-medium">
-            Borough Councils Monitored
+          <label className="block text-xs text-gray-500 mb-2 uppercase font-medium tracking-wide">
+            Councils We&apos;re Monitoring
           </label>
           <div className="flex flex-wrap gap-2 mb-3">
             {geo.borough_councils.map((c) => (
               <span
                 key={c}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-900 rounded-lg text-sm capitalize"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-900 rounded-lg text-sm font-medium capitalize"
               >
                 {c}
                 <button
@@ -494,7 +522,7 @@ export default function SettingsPage() {
                       ),
                     })
                   }
-                  className="text-blue-400 hover:text-red-600"
+                  className="text-blue-400 hover:text-red-600 transition-colors"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -508,7 +536,7 @@ export default function SettingsPage() {
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-navy-500 focus:border-transparent"
             >
               <option value="">Add council...</option>
-              {ALL_COUNCILS.filter(
+              {AVAILABLE_COUNCILS.filter(
                 (c) => !geo.borough_councils.includes(c)
               ).map((c) => (
                 <option key={c} value={c}>
@@ -518,7 +546,10 @@ export default function SettingsPage() {
             </select>
             <button
               onClick={() => {
-                if (newCouncil && !geo.borough_councils.includes(newCouncil)) {
+                if (
+                  newCouncil &&
+                  !geo.borough_councils.includes(newCouncil)
+                ) {
                   setGeo({
                     ...geo,
                     borough_councils: [...geo.borough_councils, newCouncil],
@@ -535,41 +566,68 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* ═══ Lead Scoring ═══ */}
+      {/* ═══ Lead Quality ═══ */}
       <section className="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-navy-900 mb-4 flex items-center gap-2">
-          <Target className="w-5 h-5 text-gold" /> Lead Scoring
+        <h3 className="text-lg font-semibold text-navy-900 mb-1 flex items-center gap-2">
+          <Target className="w-5 h-5 text-gold" /> Lead Quality
         </h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Fine-tune how we score and filter leads for you. Higher thresholds =
+          fewer but better quality leads.
+        </p>
 
         {/* Weights */}
         <div className="space-y-4 mb-6">
-          {([
-            ["geography", "Geography"],
-            ["property_value", "Property Value"],
-            ["work_type", "Work Type Match"],
-            ["timing", "Timing"],
-          ] as const).map(([key, label]) => (
-            <div key={key} className="flex items-center gap-4">
-              <span className="text-sm text-gray-600 w-36">{label}</span>
-              <input
-                type="range"
-                min={0}
-                max={50}
-                value={scoring.weights[key] || 0}
-                onChange={(e) => {
-                  setScoring({
-                    ...scoring,
-                    weights: {
-                      ...scoring.weights,
-                      [key]: parseInt(e.target.value),
-                    },
-                  });
-                }}
-                className="flex-1"
-              />
-              <span className="text-sm font-bold text-navy-900 w-14 text-right">
-                {scoring.weights[key] || 0} pts
-              </span>
+          {(
+            [
+              [
+                "geography",
+                "Geography",
+                "How close is the property to your office?",
+              ],
+              [
+                "property_value",
+                "Property Value",
+                "Higher value properties = bigger projects",
+              ],
+              [
+                "work_type",
+                "Work Type Match",
+                "Does this match your core services?",
+              ],
+              [
+                "timing",
+                "Timing",
+                "How recently was the application submitted?",
+              ],
+            ] as const
+          ).map(([key, label, hint]) => (
+            <div key={key}>
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-gray-700 w-36 font-medium">
+                  {label}
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={50}
+                  value={scoring.weights[key] || 0}
+                  onChange={(e) => {
+                    setScoring({
+                      ...scoring,
+                      weights: {
+                        ...scoring.weights,
+                        [key]: parseInt(e.target.value),
+                      },
+                    });
+                  }}
+                  className="flex-1"
+                />
+                <span className="text-sm font-bold text-navy-900 w-14 text-right">
+                  {scoring.weights[key] || 0} pts
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-400 ml-40">{hint}</p>
             </div>
           ))}
           <div className="text-right">
@@ -585,7 +643,7 @@ export default function SettingsPage() {
                   }`}
                 >
                   Total: {total}/100
-                  {total !== 100 && " (must equal 100)"}
+                  {total !== 100 && " — adjust sliders to total 100"}
                 </span>
               );
             })()}
@@ -596,7 +654,7 @@ export default function SettingsPage() {
         <div className="grid grid-cols-2 gap-6 pt-4 border-t border-gray-100">
           <div>
             <label className="block text-xs text-gray-500 mb-1">
-              Minimum Score (create lead)
+              Minimum Score to Create Lead
             </label>
             <input
               type="number"
@@ -611,10 +669,13 @@ export default function SettingsPage() {
               }
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-lg font-bold text-navy-900 focus:ring-2 focus:ring-navy-500 focus:border-transparent"
             />
+            <p className="text-[11px] text-gray-400 mt-1">
+              Below this score, we won&apos;t create a lead
+            </p>
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">
-              Auto-send Threshold
+              Auto-send Letter Threshold
             </label>
             <input
               type="number"
@@ -629,24 +690,33 @@ export default function SettingsPage() {
               }
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-lg font-bold text-green-600 focus:ring-2 focus:ring-navy-500 focus:border-transparent"
             />
+            <p className="text-[11px] text-gray-400 mt-1">
+              Above this score, letters send automatically
+            </p>
           </div>
         </div>
       </section>
 
-      {/* ═══ Notifications (read-only for now) ═══ */}
+      {/* ═══ Notifications ═══ */}
       <section className="bg-white rounded-xl border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-navy-900 mb-4 flex items-center gap-2">
-          <Bell className="w-5 h-5 text-gold" /> Notifications
+          <Bell className="w-5 h-5 text-gold" /> Your Notifications
         </h3>
         <dl className="space-y-3">
           {[
-            ["Daily Summary", `8:00 AM → ${company.email || "john@smithandsons.co.uk"}`],
-            ["Weekly Report", `Monday 9:00 AM → ${company.email || "john@smithandsons.co.uk"}`],
-            ["Planning Sync", "Daily at 6:00 AM"],
+            [
+              "Daily Lead Summary",
+              `8:00 AM → ${CLIENT.email}`,
+            ],
+            [
+              "Weekly Performance Report",
+              `Monday 9:00 AM → ${CLIENT.email}`,
+            ],
+            ["Planning Portal Sync", "Daily at 6:00 AM — automatic"],
           ].map(([label, value]) => (
-            <div key={label} className="flex justify-between">
+            <div key={label} className="flex justify-between items-center">
               <dt className="text-sm text-gray-600">{label}</dt>
-              <dd className="text-sm text-navy-900">{value}</dd>
+              <dd className="text-sm text-navy-900 font-medium">{value}</dd>
             </div>
           ))}
         </dl>
@@ -658,7 +728,8 @@ export default function SettingsPage() {
           onClick={handleSave}
           disabled={
             saving ||
-            Object.values(scoring.weights).reduce((a, b) => a + b, 0) !== 100
+            Object.values(scoring.weights).reduce((a, b) => a + b, 0) !==
+              100
           }
           className="flex items-center gap-2 px-6 py-3 bg-navy-900 text-white rounded-xl text-sm font-semibold hover:bg-navy-700 disabled:opacity-50 shadow-lg transition-all"
         >
@@ -670,7 +741,7 @@ export default function SettingsPage() {
           ) : (
             <>
               <Save className="w-4 h-4" />
-              Save All Settings
+              Save Settings
             </>
           )}
         </button>
