@@ -113,12 +113,11 @@ def download_letter_pdf(letter_id: UUID, db: Session = Depends(get_db)):
     generator = PDFGenerator()
     lead = db.query(Lead).filter(Lead.id == letter.lead_id).first()
     address = lead.address if lead else "Homeowner"
-    postcode = lead.postcode if lead else ""
 
     pdf_bytes = generator.generate_letter_pdf(
-        letter_text=letter.content,
+        letter_content=letter.content,
         recipient_address=address,
-        recipient_postcode=postcode,
+        case_studies=[],
         qr_url=letter.qr_code_url,
     )
 
