@@ -55,15 +55,43 @@ async def enrich_with_epc(state: AgentState) -> dict:
     """
     postcode = state["planning_app_data"].get("postcode", "")
     address = state["planning_app_data"].get("address", "")
+    description = state["planning_app_data"].get("description", "")
+    borough = state["planning_app_data"].get("local_authority", "")
+
+    # If no postcode, try to derive it from address, description, or geocoding
+    if not postcode:
+        logger.info("No postcode — attempting to derive from address/description/geocoding")
+        from app.services.postcode_service import PostcodeService
+        pc_service = PostcodeService()
+        try:
+            # Try address first, then description (councils often put addresses there)
+            for text_source in [address, description]:
+                if not text_source:
+                    continue
+                result = await pc_service.derive_postcode(text_source, borough)
+                if result["postcode"]:
+                    postcode = result["postcode"]
+                    logger.info(
+                        f"Derived postcode {postcode} via {result['method']} "
+                        f"(confidence={result['confidence']:.0%})"
+                    )
+                    # Update state so downstream agents have it too
+                    state["planning_app_data"]["postcode"] = postcode
+                    break
+        finally:
+            await pc_service.close()
 
     if not postcode:
-        logger.warning("No postcode for EPC lookup")
+        logger.warning("No postcode and couldn't derive one — skipping EPC")
         return {
             "epc_data": None,
             "epc_match_confidence": 0.0,
             "epc_source": "none",
             "errors": [],
-            "agent_logs": [f"[Agent 2 @ {datetime.utcnow().isoformat()}] No postcode — skipping EPC"],
+            "agent_logs": [
+                f"[Agent 2 @ {datetime.utcnow().isoformat()}] "
+                f"No postcode (tried address, description, geocoding) — skipping EPC"
+            ],
             "processing_steps": [{"agent": "epc_enricher", "status": "skipped", "reason": "no_postcode"}],
             "current_agent": "epc_enricher",
         }
