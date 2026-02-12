@@ -75,6 +75,11 @@ class PlanningApplication(Base):
     applicant_name = Column(String(200))
     raw_data = Column(JSONB, default=dict)
 
+    # Batch processing status tracking
+    processing_status = Column(String(20), default="new", server_default="new", nullable=False)
+    processing_started_at = Column(DateTime, nullable=True)
+    processing_error = Column(Text, nullable=True)
+
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -86,6 +91,7 @@ class PlanningApplication(Base):
         Index("ix_planning_postcode", "postcode"),
         Index("ix_planning_submitted", "submitted_date"),
         Index("ix_planning_reference", "reference"),
+        Index("ix_planning_processing_status", "processing_status"),
     )
 
 

@@ -88,6 +88,7 @@ async def trigger_sync(
                     local_authority=app_data.get("local_authority"),
                     applicant_name=app_data.get("applicant_name"),
                     raw_data=app_data,
+                    processing_status="new",
                 )
                 db.add(planning_app)
                 new_count += 1
@@ -194,6 +195,11 @@ async def process_single_application(app_id: UUID, db: Session = Depends(get_db)
         "applicant_name": planning_app.applicant_name,
     }
 
+    # Mark as processing
+    planning_app.processing_status = "processing"
+    planning_app.processing_started_at = __import__("datetime").datetime.utcnow()
+    db.commit()
+
     result = await run_pipeline(str(app_id), app_data)
 
     # Save results to database
@@ -266,6 +272,9 @@ async def process_single_application(app_id: UUID, db: Session = Depends(get_db)
                 letter.pdf_url = f"/data/pdfs/{letter.id}.pdf"
             db.flush()
 
+    # Mark as processed
+    planning_app.processing_status = "processed"
+    planning_app.processing_error = None
     db.commit()
 
     return {
@@ -300,6 +309,63 @@ def planning_stats(db: Session = Depends(get_db)):
         "total_applications": total,
         "with_detail_url": with_detail_url,
         "by_council": {c: n for c, n in councils if c},
+    }
+
+
+@router.post("/batch-process")
+def trigger_batch_process(
+    batch_size: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """Manually trigger batch processing of unprocessed applications.
+
+    In dev mode runs inline. In production delegates to Celery.
+    """
+    # Count unprocessed first
+    unprocessed = (
+        db.query(func.count(PlanningApplication.id))
+        .filter(PlanningApplication.processing_status == "new")
+        .scalar()
+    )
+
+    if unprocessed == 0:
+        return {"status": "nothing_to_process", "unprocessed": 0}
+
+    if settings.app_env == "development" or settings.debug:
+        from app.tasks.batch_process import batch_process_leads
+        result = batch_process_leads(batch_size)
+        return {"status": "batch_complete", **result}
+    else:
+        from app.tasks.batch_process import batch_process_leads
+        batch_process_leads.delay(batch_size)
+        return {
+            "status": "batch_started",
+            "batch_size": batch_size,
+            "unprocessed": unprocessed,
+        }
+
+
+@router.get("/stats/processing")
+def processing_stats(db: Session = Depends(get_db)):
+    """Statistics about the processing pipeline status."""
+    status_counts = (
+        db.query(
+            PlanningApplication.processing_status,
+            func.count(PlanningApplication.id),
+        )
+        .group_by(PlanningApplication.processing_status)
+        .all()
+    )
+
+    counts = {s: c for s, c in status_counts if s}
+    total = sum(c for _, c in status_counts)
+
+    return {
+        "new": counts.get("new", 0),
+        "processing": counts.get("processing", 0),
+        "processed": counts.get("processed", 0),
+        "failed": counts.get("failed", 0),
+        "total": total,
     }
 
 

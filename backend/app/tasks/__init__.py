@@ -11,6 +11,7 @@ celery_app = Celery(
     backend=settings.database_url,
     include=[
         "app.tasks.daily_sync",
+        "app.tasks.batch_process",
         "app.tasks.process_lead",
         "app.tasks.send_reports",
         "app.tasks.cleanup",
@@ -34,10 +35,19 @@ celery_app.conf.update(
     task_max_retries=3,
     task_routes={
         "daily_planning_sync": {"queue": "sync"},
+        "batch_process_leads": {"queue": "processing"},
+        "process_and_update_status": {"queue": "processing"},
         "process_lead": {"queue": "processing"},
         "send_daily_summary": {"queue": "reports"},
         "send_weekly_report": {"queue": "reports"},
         "cleanup_old_data": {"queue": "maintenance"},
+    },
+    # Batch orchestrator needs more time (dispatches up to 50 apps with delays)
+    task_annotations={
+        "batch_process_leads": {
+            "time_limit": 900,
+            "soft_time_limit": 840,
+        },
     },
 )
 
@@ -45,6 +55,10 @@ celery_app.conf.beat_schedule = {
     "daily-planning-sync": {
         "task": "daily_planning_sync",
         "schedule": crontab(hour=6, minute=0),
+    },
+    "daily-batch-process": {
+        "task": "batch_process_leads",
+        "schedule": crontab(hour=7, minute=0),
     },
     "daily-summary-email": {
         "task": "send_daily_summary",

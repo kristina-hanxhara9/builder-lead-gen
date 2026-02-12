@@ -32,6 +32,7 @@ class PlanningAppCreate(PlanningAppBase):
 
 class PlanningAppResponse(PlanningAppBase):
     id: UUID
+    processing_status: Optional[str] = "new"
     created_at: datetime
 
     class Config:

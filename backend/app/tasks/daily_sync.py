@@ -1,11 +1,15 @@
 """Daily planning application sync task.
 
 Runs at 6 AM to fetch new planning applications from London councils,
-deduplicate, insert into database, and trigger lead processing.
+deduplicate, and insert into database with processing_status='new'.
+
+Processing happens separately in the 7 AM batch_process task.
 """
 
 import asyncio
 import logging
+
+from sqlalchemy import func as sa_func
 
 from app.core.database import SessionLocal
 from app.models.database import PlanningApplication
@@ -16,8 +20,15 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="daily_planning_sync", bind=True, max_retries=3)
-def sync_planning_applications(self, days_back: int = 1):
-    """Fetch new planning applications and trigger processing.
+def sync_planning_applications(self, days_back: int = None):
+    """Fetch new planning applications and save to database.
+
+    Does NOT trigger processing — that happens in batch_process_leads at 7 AM.
+
+    Args:
+        days_back: Days to look back. If None, auto-detects:
+                   - First run (empty table): 90 days
+                   - Subsequent runs: 1 day
 
     Expected runtime: 10-15 minutes
     Expected new applications: 5-15 per day
@@ -33,12 +44,23 @@ def sync_planning_applications(self, days_back: int = 1):
         loop.close()
 
 
-async def _async_sync(days_back: int) -> dict:
+async def _async_sync(days_back: int = None) -> dict:
     """Async implementation of the planning sync."""
     api = LondonPlanningAPI()
     db = SessionLocal()
 
     try:
+        # Auto-detect first run vs daily
+        if days_back is None:
+            existing_count = db.query(
+                sa_func.count(PlanningApplication.id)
+            ).scalar()
+            days_back = 90 if existing_count == 0 else 1
+            logger.info(
+                f"Auto-detected days_back={days_back} "
+                f"(existing applications: {existing_count})"
+            )
+
         applications = await api.fetch_recent_applications(days_back)
         logger.info(f"Fetched {len(applications)} filtered applications")
 
@@ -74,13 +96,9 @@ async def _async_sync(days_back: int) -> dict:
                 local_authority=app_data.get("local_authority"),
                 applicant_name=app_data.get("applicant_name"),
                 raw_data=app_data,
+                processing_status="new",
             )
             db.add(planning_app)
-            db.flush()
-
-            from app.tasks.process_lead import process_planning_application
-            process_planning_application.delay(str(planning_app.id))
-
             new_count += 1
 
         db.commit()
@@ -89,6 +107,7 @@ async def _async_sync(days_back: int) -> dict:
             "fetched": len(applications),
             "new": new_count,
             "skipped": skipped_count,
+            "days_back": days_back,
         }
         logger.info(f"Sync complete: {summary}")
         return summary
