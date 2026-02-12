@@ -278,8 +278,14 @@ class GeminiService:
         planning_status: str,
         postcode_area: str,
         case_studies: list[dict],
+        property_facts: Optional[dict] = None,
     ) -> Optional[str]:
-        """Generate a personalized sales letter using the prompt template."""
+        """Generate a personalized sales letter grounded in real data.
+
+        Args:
+            property_facts: Real data from EPC + planning extraction
+                           (floor area, EPC rating, age, materials, etc.)
+        """
         prompt_path = (
             Path(__file__).resolve().parent.parent.parent.parent
             / "config"
@@ -296,7 +302,12 @@ class GeminiService:
                 f"Client said: \"{cs['testimonial']}\"\n"
             )
 
+        # Build property facts string from real EPC + extraction data
+        facts_text = self._build_property_facts(property_facts or {})
+
         prompt = template.format(
+            owner_name=client_config.owner_name,
+            company_name=client_config.company_name,
             company_background=client_config.get_company_background(),
             address=address,
             planning_reference=planning_reference,
@@ -304,11 +315,9 @@ class GeminiService:
             property_type=property_type or "residential property",
             planning_status=planning_status or "submitted",
             postcode_area=postcode_area,
+            trading_since=client_config.trading_since,
             case_studies=cs_text or "No similar projects available.",
-            completed_count="400+",
-            work_type="extension",
-            street="nearby street",
-            postcode=postcode_area,
+            property_facts=facts_text,
         )
 
         try:
@@ -330,6 +339,64 @@ class GeminiService:
         except Exception as e:
             logger.error(f"Gemini letter generation failed: {e}")
             return None
+
+    @staticmethod
+    def _build_property_facts(facts: dict) -> str:
+        """Build a human-readable property facts section from real data.
+
+        Only includes facts that actually exist — no fabrication.
+        Data comes from EPC API + PDF extraction (via unified_data).
+        """
+        lines = []
+
+        if facts.get("epc_rating"):
+            line = f"- EPC Energy Rating: {facts['epc_rating']}"
+            if facts.get("epc_potential_rating"):
+                line += f" (potential: {facts['epc_potential_rating']})"
+            lines.append(line)
+
+        if facts.get("total_floor_area_m2"):
+            lines.append(f"- Floor Area: {facts['total_floor_area_m2']}m²")
+
+        if facts.get("floor_area_added_m2"):
+            lines.append(f"- Proposed Additional Floor Area: {facts['floor_area_added_m2']}m²")
+
+        if facts.get("construction_age"):
+            lines.append(f"- Property Age: {facts['construction_age']}")
+
+        if facts.get("bedrooms_before"):
+            bed_text = f"- Bedrooms: {facts['bedrooms_before']}"
+            if facts.get("bedrooms_after"):
+                bed_text += f" → {facts['bedrooms_after']} (after work)"
+            lines.append(bed_text)
+
+        if facts.get("materials"):
+            materials = facts["materials"]
+            if isinstance(materials, list) and materials:
+                lines.append(f"- Proposed Materials: {', '.join(materials)}")
+
+        if facts.get("estimated_cost"):
+            lines.append(f"- Estimated Project Cost: £{facts['estimated_cost']:,.0f}")
+
+        if facts.get("walls"):
+            lines.append(f"- Existing Walls: {facts['walls']}")
+
+        if facts.get("roof"):
+            lines.append(f"- Existing Roof: {facts['roof']}")
+
+        if facts.get("heating"):
+            lines.append(f"- Heating: {facts['heating']}")
+
+        if facts.get("conservation_area"):
+            lines.append("- Property is in a Conservation Area")
+
+        if facts.get("listed_building"):
+            lines.append("- Listed Building")
+
+        if not lines:
+            return "No additional property data available."
+
+        return "\n".join(lines)
 
     def _estimate_cost(self, model_name: str, response) -> float:
         """Estimate API call cost in GBP."""

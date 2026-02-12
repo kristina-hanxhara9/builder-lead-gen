@@ -1,4 +1,4 @@
-You are John Smith, owner of Smith & Sons Builders, writing a personal letter to a homeowner.
+You are {owner_name}, owner of {company_name}, writing a personal letter to a homeowner.
 
 COMPANY BACKGROUND:
 {company_background}
@@ -6,31 +6,34 @@ COMPANY BACKGROUND:
 HOMEOWNER DETAILS:
 Address: {address}
 Planning Application: {planning_reference}
-Work Description: {work_description}
-Property Type: {property_type}
 Planning Status: {planning_status}
+Property Type: {property_type}
+Work Description: {work_description}
 
-RELEVANT PAST PROJECTS (mention 1-2 similar):
+PROPERTY DATA (from official records — use these facts where relevant):
+{property_facts}
+
+RELEVANT PAST PROJECTS (mention 1-2 if available):
 {case_studies}
 
 YOUR TASK:
 Write a 250-300 word personal letter with this structure:
 
 1. OPENING (2-3 sentences):
-   - Congratulate on planning approval/submission
+   - Congratulate on their planning application
    - Explain how you found out (we monitor planning applications in {postcode_area})
 
 2. WHY WE'RE WRITING (2-3 sentences):
-   - We specialize in exactly this type of work
-   - We've completed {completed_count} similar projects in your area
+   - We specialise in exactly this type of work ({work_description})
+   - We've been doing this since {trading_since} in the {postcode_area} area
 
 3. RELEVANT EXPERIENCE (3-4 sentences):
-   - Mention 1-2 similar projects nearby (from case studies)
-   - Specific details: "Last year we completed a {work_type} on {street} in {postcode}"
-   - Share a relevant challenge you solved (Listed Building, Conservation Area, etc.)
+   - If case studies are provided, mention 1-2 similar projects with REAL details
+   - Only reference projects that are listed above — NEVER invent project details
+   - If no case studies are available, talk about your experience with this type of work generally
 
 4. OUR APPROACH (2-3 sentences):
-   - Minimal disruption to your household
+   - Minimal disruption to their household
    - In-house team (no subcontractors)
    - Full project management from planning to completion
 
@@ -38,26 +41,25 @@ Write a 250-300 word personal letter with this structure:
    - Offer free site visit and detailed quote
    - No obligation, just happy to discuss the project
 
-6. CLOSING (1 sentence):
+6. CLOSING:
    - Warm, personal sign-off
+
+CRITICAL RULES:
+- ONLY state facts you can see in the data above
+- NEVER invent project addresses, street names, or specific details not provided
+- NEVER claim a specific number of completed projects unless it's in the company background
+- If property data mentions EPC rating, floor area, or building age, you may reference it naturally (e.g. "given your property's current energy rating, there's a great opportunity to improve efficiency with the new extension")
+- Use the actual work description from their planning application, not generic terms
 
 TONE GUIDELINES:
 - Friendly but professional (you're a local business owner, not a salesperson)
 - Personal (use "I" and "we", not corporate language)
-- Confident but not pushy (you're offering expertise, not begging for work)
-- Local (mention specific streets/areas you know)
+- Confident but not pushy (offering expertise, not begging for work)
 - Respectful (acknowledge this is their home and a big investment)
 
 LANGUAGE STYLE:
-- Short sentences
-- Active voice
-- Specific details (not generic claims)
+- Short sentences, active voice
+- Specific details from the data (not generic claims)
 - British English (labour, colour, specialise)
 
-AVOID:
-- Corporate jargon
-- Pressure tactics
-- Exaggeration
-- Generic statements that could apply to any builder
-
-Write the complete letter now. Return ONLY the letter text, starting with "Dear Homeowner" and ending with "Yours sincerely, John Smith, Director, Smith & Sons Builders".
+Write the complete letter now. Start with "Dear Homeowner" — do NOT include a sign-off (the PDF system adds the signature automatically).

@@ -40,8 +40,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Mount API routers
@@ -61,7 +61,12 @@ def health_check():
 
 @app.on_event("startup")
 async def startup():
-    logging.getLogger(__name__).info("Smith & Sons Lead Generation API starting...")
+    logger = logging.getLogger(__name__)
+    logger.info("Smith & Sons Lead Generation API starting...")
+    if settings.secret_key.startswith("change-me"):
+        logger.warning("SECRET_KEY is using the default value — set a secure key for production")
+    if not settings.gemini_api_key:
+        logger.warning("GEMINI_API_KEY not set — AI features will not work")
 
 
 @app.on_event("shutdown")

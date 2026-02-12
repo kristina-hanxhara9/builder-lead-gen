@@ -90,12 +90,13 @@ async def generate_letter_content(
     planning_status: str = "submitted",
     postcode_area: str = "",
     case_studies_json: str = "[]",
+    property_facts_json: str = "{}",
 ) -> str:
     """Generate a personalised sales letter using Gemini AI.
 
-    Creates a professional, warm letter tailored to the homeowner's
-    specific planning application. Includes references to local case
-    studies and the homeowner's planned work.
+    Creates a professional, warm letter grounded in real data from
+    the homeowner's planning application and EPC records. The letter
+    only references facts that are actually provided.
 
     Args:
         address: Full property address.
@@ -105,14 +106,36 @@ async def generate_letter_content(
         planning_status: E.g. "approved", "pending", "submitted".
         postcode_area: Postcode district for local references.
         case_studies_json: JSON string of case studies to reference.
+        property_facts_json: JSON string of real property data from
+            EPC and planning extraction (floor area, energy rating,
+            building age, materials, bedrooms, etc.)
 
     Returns:
         JSON with letter content, word count, and cost.
     """
-    try:
-        case_studies = json.loads(case_studies_json) if case_studies_json else []
-    except json.JSONDecodeError:
-        case_studies = []
+    # LLM may pass strings or already-parsed dicts/lists
+    if isinstance(case_studies_json, dict):
+        # LLM sometimes passes the full select_case_studies output
+        case_studies = case_studies_json.get("case_studies", [])
+    elif isinstance(case_studies_json, list):
+        case_studies = case_studies_json
+    else:
+        try:
+            parsed = json.loads(case_studies_json) if case_studies_json else []
+            if isinstance(parsed, dict):
+                case_studies = parsed.get("case_studies", [])
+            else:
+                case_studies = parsed
+        except (json.JSONDecodeError, TypeError):
+            case_studies = []
+
+    if isinstance(property_facts_json, dict):
+        property_facts = property_facts_json
+    else:
+        try:
+            property_facts = json.loads(property_facts_json) if property_facts_json else {}
+        except (json.JSONDecodeError, TypeError):
+            property_facts = {}
 
     gemini = _get_gemini()
     letter_text = await gemini.generate_letter(
@@ -123,6 +146,7 @@ async def generate_letter_content(
         planning_status=planning_status,
         postcode_area=postcode_area,
         case_studies=case_studies,
+        property_facts=property_facts,
     )
 
     if letter_text:
