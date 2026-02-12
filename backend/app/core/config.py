@@ -27,9 +27,9 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql://builder:builder@localhost:5432/builder_leads"
     redis_url: str = "redis://localhost:6379/0"
-    secret_key: str = "change-me"
+    secret_key: str = "change-me-to-a-random-string"
     app_env: str = "development"
-    debug: bool = True
+    debug: bool = False
     backend_url: str = "http://localhost:8000"
     frontend_url: str = "http://localhost:3000"
 

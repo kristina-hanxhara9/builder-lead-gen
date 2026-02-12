@@ -36,18 +36,26 @@ for a qualified lead — complete with property imagery.
 1. Get company context for the letter
 2. Select relevant case studies based on work type and location
 3. Fetch property images (Street View + map) — this makes the PDF much more personal
-4. Generate the letter content with all the personalisation data
+4. Generate the letter content — pass ALL available property data via property_facts_json
 5. Generate a QR tracking URL
 6. Create the branded PDF (images are automatically included if fetched)
+
+## CRITICAL — Property data grounding:
+When calling generate_letter_content, you MUST pass the property_facts_json parameter
+with ALL the real property data available. This includes EPC data (energy rating,
+floor area, building age, walls, roof, heating) and planning extraction data
+(materials, bedrooms, estimated cost, conservation area status).
+
+The letter MUST only reference facts that come from real data. Never fabricate
+project details, addresses, or statistics.
 
 ## Letter quality guidelines:
 - Professional but warm — we're a family business
 - Reference the specific planning application
-- Mention nearby projects (case studies) for credibility
-- Keep it to 300-500 words
-- Include a clear call to action (phone number)
-- Don't be pushy — be helpful and knowledgeable
-- Mention the specific type of work they're planning"""
+- Use real property facts (EPC rating, floor area, etc.) for personalisation
+- Mention nearby projects ONLY from case studies (never invent them)
+- Keep it to 250-300 words
+- Don't be pushy — be helpful and knowledgeable"""
 
 
 async def generate_letter(state: AgentState) -> dict:
@@ -68,6 +76,28 @@ async def generate_letter(state: AgentState) -> dict:
         temperature=0.3,  # Slightly higher for creative letter writing
     )
 
+    # Build property facts JSON for the letter tool
+    import json as _json
+    property_facts = {
+        "epc_rating": unified.get("epc_rating"),
+        "epc_potential_rating": unified.get("epc_potential_rating"),
+        "total_floor_area_m2": unified.get("total_floor_area_m2"),
+        "floor_area_added_m2": unified.get("floor_area_added_m2"),
+        "construction_age": unified.get("construction_age"),
+        "bedrooms_before": unified.get("bedrooms_before"),
+        "bedrooms_after": unified.get("bedrooms_after"),
+        "materials": unified.get("materials"),
+        "estimated_cost": unified.get("estimated_cost"),
+        "walls": unified.get("walls"),
+        "roof": unified.get("roof"),
+        "heating": unified.get("heating"),
+        "conservation_area": unified.get("conservation_area"),
+        "listed_building": unified.get("listed_building"),
+    }
+    # Remove None values to keep it clean
+    property_facts = {k: v for k, v in property_facts.items() if v is not None}
+    property_facts_str = _json.dumps(property_facts)
+
     prompt = ChatPromptTemplate.from_messages([
         ("system", LETTER_SYSTEM_PROMPT),
         ("human",
@@ -80,6 +110,11 @@ async def generate_letter(state: AgentState) -> dict:
          "**District**: {district}\n"
          "**Lead Score**: {lead_score}/100\n"
          "**EPC Rating**: {epc_rating}\n\n"
+         "**Property Facts (pass this as property_facts_json to generate_letter_content)**:\n"
+         "{property_facts}\n\n"
+         "IMPORTANT: When calling generate_letter_content, pass the property_facts_json "
+         "parameter with the property facts JSON above. This ensures the letter is "
+         "grounded in real data.\n\n"
          "Create the letter, select case studies, generate the PDF, "
          "and create a QR tracking URL. Letter ID for tracking: {app_id}"),
         MessagesPlaceholder("agent_scratchpad"),
@@ -95,6 +130,7 @@ async def generate_letter(state: AgentState) -> dict:
         district=unified.get("district", "SW London"),
         lead_score=state.get("lead_score", 0),
         epc_rating=unified.get("epc_rating", "N/A"),
+        property_facts=property_facts_str,
         app_id=app_id,
         agent_scratchpad=[],
     )
@@ -124,11 +160,14 @@ async def generate_letter(state: AgentState) -> dict:
                 result = json.dumps({"error": f"Unknown tool: {tool_name}"})
             else:
                 try:
+                    logger.info(f"[Agent 5] Calling {tool_name}")
+                    logger.debug(f"[Agent 5] Args types: {[(k, type(v).__name__) for k, v in tool_args.items()]}")
                     if hasattr(tool_fn, "coroutine") or "async" in str(type(tool_fn)):
                         result = await tool_fn.ainvoke(tool_args)
                     else:
                         result = tool_fn.invoke(tool_args)
                 except Exception as e:
+                    logger.error(f"[Agent 5] Tool {tool_name} failed: {e}", exc_info=True)
                     result = json.dumps({"error": str(e)})
 
             messages.append(ToolMessage(content=str(result), tool_call_id=tool_call["id"]))
